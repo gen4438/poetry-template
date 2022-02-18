@@ -1,0 +1,71 @@
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  DOCKER_IMAGE_NAME: "python:3.8.12-bullseye"
+
+cache:
+  paths:
+    - ${HOME}/.cache/pip
+    - ${HOME}/.cache/pypoetry
+    - apt-cache
+
+before_script:
+  - python -V # Print out python version for debugging
+  - make poetry-download
+  - export PATH="${HOME}/.local/bin:${PATH}" # poetry のパス通す
+
+stages:
+  - build
+  - test
+  - deploy
+
+test:
+  stage: test
+  image: ${DOCKER_IMAGE_NAME}
+  script:
+    - make install
+    - make test
+    - mv htmlcov _htmlcov
+  artifacts:
+    paths:
+      - _htmlcov
+
+deploy:wheel:
+  stage: deploy
+  image: ${DOCKER_IMAGE_NAME}
+  script:
+    - make install
+    - CI_JOB_USER=$CI_DEPLOY_USER CI_JOB_TOKEN=$CI_DEPLOY_PASSWORD make release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+deploy:docs:
+  stage: deploy
+  image: ${DOCKER_IMAGE_NAME}
+  script:
+    - make install
+    - apt update && apt install -y pandoc # juptyer notebook をドキュメンテーションに埋め込むのに pandoc が必要
+    - make docs
+    - mv docs _docs # 後の make clean で消されないように退避
+  artifacts:
+    paths:
+      - _docs/_build
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+pages:
+  stage: deploy
+  needs:
+    - job: "test"
+      artifacts: true
+    - job: "deploy:docs"
+      artifacts: true
+  before_script: []
+  script:
+    - mkdir public
+    - mv _docs/_build public/docs
+    - mv _htmlcov public/htmlcov
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

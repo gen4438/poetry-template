@@ -1,0 +1,14 @@
+.*
+bin
+configs
+data
+docker
+docker-compose
+docs
+examples
+htmlcov
+test_files
+test_results
+tests
+tmp
+worktrees
